@@ -33,3 +33,6 @@ Luststorm was developed through practical in-game testing and iterative debuggin
 
 ## Version
 Current build: `1.0.0-beta`
+
+## Release
+Also published on CurseForge.
