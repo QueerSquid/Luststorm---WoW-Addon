@@ -183,16 +183,20 @@ frame:SetScript("OnEvent", function(_, event, ...)
         end
 
         for _, aura in ipairs(updateInfo.addedAuras) do
-            if aura and IsTriggerDebuff(aura.spellId) then
-                if debugEvents then
-                    Print("New trigger debuff added: " .. tostring(aura.spellId))
-                end
+            if aura then
+                local _, _, _, _, _, _, _, _, _, spellId = AuraUtil.UnpackAuraData(aura)
 
-                if aura.spellId ~= lastSeenDebuffId then
-                    lastSeenDebuffId = aura.spellId
-                    StartLuststorm()
+                if IsTriggerDebuffSpellId(spellId) then
+                    if debugEvents then
+                        Print("New trigger debuff added: " .. tostring(spellId))
+                    end
+
+                    if spellId ~= lastSeenDebuffId then
+                        lastSeenDebuffId = spellId
+                        StartLuststorm()
+                    end
+                    return
                 end
-                return
             end
         end
 
