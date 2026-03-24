@@ -1,38 +1,38 @@
 # Luststorm
 
-Luststorm is a lightweight World of Warcraft addon that plays Sandstorm when lust hits.
+Luststorm is a lightweight World of Warcraft addon that plays Sandstorm when Bloodlust, Heroism, Time Warp, and similar effects are triggered.
 
 ## Features
-- Plays a sound clip when Bloodlust, Heroism, Time Warp, Primal Rage, or similar effects are used
-- Includes slash commands for testing, stopping, resuming, and debugging
+- Plays a custom sound clip when Bloodlust, Heroism, Time Warp, Primal Rage, or similar effects are used
+- Lightweight and simple
+- Includes slash commands for testing, stopping, resuming, status checks, and debugging
 - Built and refined through live gameplay testing
 
 ## Commands
-- `/luststorm test` — manually play the sound for testing
-- `/luststorm stop` — stop playback
-- `/luststorm resume` — resume live detection
-- `/luststorm status` — show current addon state
-- `/luststorm debug` — toggle debug output
+- `/luststorm test` — manually plays the sound for testing
+- `/luststorm stop` — stops current playback
+- `/luststorm resume` — resumes live detection after testing
+- `/luststorm status` — shows current addon state in chat
+- `/luststorm debug` — toggles debug output in chat
 
 ## Installation
 1. Download or copy the `Luststorm` folder
-2. Place it in:
-
-   `World of Warcraft/_retail_/Interface/AddOns/`
-
+2. Place it in `World of Warcraft/_retail_/Interface/AddOns/`
 3. Restart World of Warcraft or run `/reload`
 
-## Current Behavior
-Luststorm is designed to trigger when a lust-related effect is applied and play a sound clip for the active window of the effect.
+## Current Status
+Luststorm is working properly in live combat testing, including fresh lust triggers during combat. Recent changes have also improved reload and zone transition behavior during testing.
 
-## Known Issue
-During zone or loading screen transitions, the addon may incorrectly trigger if a lust-related debuff is already active. Core in-combat functionality is working as intended.
+## CurseForge
+Also published on [CurseForge](https://www.curseforge.com/wow/addons/luststorm).
 
 ## Development Notes
 Luststorm was developed through practical in-game testing and iterative debugging. Assisted coding tools were used during implementation, with design decisions, testing, and behavior refinement driven by active development and QA.
 
-## Version
-Current build: `1.0.0-beta`
+## Roadmap
+- Continue monitoring instance and loading screen behavior during broader testing
+- Collect feedback for future improvements and added features
+- Refine trigger handling further if new edge cases appear
 
-## Release
-Also published on CurseForge.
+## Version
+Current build: `1.0.1-beta`
