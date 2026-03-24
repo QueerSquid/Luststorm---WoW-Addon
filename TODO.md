@@ -1,5 +1,5 @@
 ## Roadmap
-- Improve zone/load transition handling while lust-related debuffs are already active
-- Add cleaner debug and status reporting
-- Continue in-game QA across raid, dungeon, and open-world content
-- Monitor feedback for requested changes and future improvements
+- Keep an eye on zone/load and instance transition behavior during broader testing
+- Clean up debug and status reporting a bit more
+- Keep doing in-game QA across raid, dungeon, and open-world content
+- Watch for feedback on requested changes and future improvements
