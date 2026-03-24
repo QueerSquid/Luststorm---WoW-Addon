@@ -6,7 +6,6 @@ Luststorm is a lightweight World of Warcraft addon that plays Sandstorm when Blo
 - Plays a custom sound clip when Bloodlust, Heroism, Time Warp, Primal Rage, or similar effects are used
 - Lightweight and simple
 - Includes slash commands for testing, stopping, resuming, status checks, and debugging
-- Built and refined through live gameplay testing
 
 ## Commands
 - `/luststorm test` — manually plays the sound for testing
