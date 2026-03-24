@@ -119,10 +119,46 @@ local function UpdateState()
             .. ", debuffId=" .. tostring(debuffId)
             .. ", debuffName=" .. tostring(debuffName)
             .. ", isPlaying=" .. tostring(isPlaying)
+            .. ", lastSeenDebuffId=" .. tostring(lastSeenDebuffId)
+            .. ", suppressExistingDebuff=" .. tostring(suppressExistingDebuff)
+            .. ", waitingForDebuffClear=" .. tostring(waitingForDebuffClear)
         )
     end
 
-    -- Only used to stop/reset State now.
+    -- On login / zoning, if the debuff already exists, do not play for it.
+    -- Wait until it fully clears once before re-arming.
+    if suppressExistingDebuff then
+        if hasDebuff then
+            waitingForDebuffClear = true
+            lastSeenDebuffId = debuffId
+            return
+        else
+            suppressExistingDebuff = false
+            lastSeenDebuffId = nil
+        end
+    end
+
+    if waitingForDebuffClear then
+        if hasDebuff then
+            lastSeenDebuffId = debuffId
+            return
+        else
+            waitingForDebuffClear = false
+            suppressExistingDebuff = false
+            lastSeenDebuffId = nil
+            if debugEvents then
+                Print("old debuff cleared; addon re-armed")
+            end
+            return
+        end
+    end
+
+    if hasDebuff and debuffId ~= lastSeenDebuffId then
+        lastSeenDebuffId = debuffId
+        StartLuststorm()
+        return
+    end
+
     if not hasDebuff then
         lastSeenDebuffId = nil
     end
@@ -136,70 +172,33 @@ frame:RegisterEvent("PLAYER_LOGIN")
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 frame:RegisterUnitEvent("UNIT_AURA", "player")
 
-local function IsTriggerDebuff(spellId)
-    return spellId and TRIGGER_DEBUFF_IDS[spellId] == true
-end
-
 frame:SetScript("OnEvent", function(_, event, ...)
     if debugEvents then
         Print("EVENT: " .. tostring(event) .. ", inCombat=" .. tostring(InCombatLockdown()))
     end
 
     if event == "PLAYER_LOGIN" then
+        suppressExistingDebuff = true
+        waitingForDebuffClear = false
+        lastSeenDebuffId = nil
+        StartUpdateTicker()
         return
     end
 
     if event == "PLAYER_ENTERING_WORLD" then
+        suppressExistingDebuff = true
+        waitingForDebuffClear = false
+        lastSeenDebuffId = nil
         return
     end
 
     if event == "UNIT_AURA" then
-        local unitTarget, updateInfo = ...
+        local unitTarget = ...
         if unitTarget ~= "player" then
             return
         end
 
-        -- Some clients may not provide updateInfo; do nothing in that case.
-        if not updateInfo then
-            return
-        end
-
-        -- Ignore full aura rebuilds caused by loading screens / zoning.
-        if updateInfo.isFullUpdate then
-            if debugEvents then
-                Print("UNIT_AURA full update ignored")
-            end
-            return
-        end
-
-        -- Clear state if debuff is gone.
-        local hasDebuff = FindTriggerDebuff()
-        if not hasDebuff then
-            lastSeenDebuffId = nil
-        end
-
-        if not updateInfo.addedAuras or #updateInfo.addedAuras == 0 then
-            return
-        end
-
-        for _, aura in ipairs(updateInfo.addedAuras) do
-            if aura then
-                local _, _, _, _, _, _, _, _, _, spellId = AuraUtil.UnpackAuraData(aura)
-
-                if IsTriggerDebuffSpellId(spellId) then
-                    if debugEvents then
-                        Print("New trigger debuff added: " .. tostring(spellId))
-                    end
-
-                    if spellId ~= lastSeenDebuffId then
-                        lastSeenDebuffId = spellId
-                        StartLuststorm()
-                    end
-                    return
-                end
-            end
-        end
-
+        UpdateState()
         return
     end
 end)
