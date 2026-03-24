@@ -26,14 +26,8 @@ local manualTestMode = false
 local updateTicker = nil
 local lastSeenDebuffId = nil
 local debugEvents = false
-local lustStopTimer = nil
 local LUST_DURATION = 40
-local suppressExistingDebuff = true
-local waitingForDebuffClear = false
-local startupCheckTimer = nil
-local zoneSuppressActive = false
-local zoneSuppressTimer = nil
-local sawDebuffDuringZoneSuppress = false
+
 
 local function Print(msg)
     DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99Luststorm:|r " .. tostring(msg))
@@ -119,151 +113,91 @@ local function UpdateState()
 
     local hasDebuff, debuffId, debuffName = FindTriggerDebuff()
 
-    if zoneSuppressActive then
-        if hasDebuff then
-            sawDebuffDuringZoneSuppress = true
-            lastSeenDebuffId = debuffId
-        end
-        return
-    end
-
     if debugEvents then
         Print(
             "UpdateState: hasDebuff=" .. tostring(hasDebuff)
             .. ", debuffId=" .. tostring(debuffId)
             .. ", debuffName=" .. tostring(debuffName)
             .. ", isPlaying=" .. tostring(isPlaying)
-            .. ", lastSeenDebuffId=" .. tostring(lastSeenDebuffId)
-            .. ", suppressExistingDebuff=" .. tostring(suppressExistingDebuff)
-            .. ", waitingForDebuffClear=" .. tostring(waitingForDebuffClear)
-            .. ", sawDebuffDuringZoneSuppress=" .. tostring(sawDebuffDuringZoneSuppress)
         )
     end
 
-    if waitingForDebuffClear then
-        if hasDebuff then
-            lastSeenDebuffId = debuffId
-            return
-        else
-            waitingForDebuffClear = false
-            suppressExistingDebuff = false
-            lastSeenDebuffId = nil
-            if debugEvents then
-                Print("old debuff cleared; addon re-armed")
-            end
-            return
-        end
-    end
-
-    -- Fresh new lust-related debuff: start playback
-    if hasDebuff and debuffId ~= lastSeenDebuffId then
-        lastSeenDebuffId = debuffId
-        StartLuststorm()
-    end
-
-    -- Reset tracking once debuff is gone
+    -- Only used to stop/reset State now.
     if not hasDebuff then
         lastSeenDebuffId = nil
     end
 end
 
 local function StartUpdateTicker()
-    if updateTicker then
-        return
-    end
-
-    updateTicker = C_Timer.NewTicker(0.1, function()
-        UpdateState()
-    end)
+    return
 end
 
 frame:RegisterEvent("PLAYER_LOGIN")
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 frame:RegisterUnitEvent("UNIT_AURA", "player")
 
-local function BeginStartupSuppression()
-    suppressExistingDebuff = true
-    waitingForDebuffClear = false
-    lastSeenDebuffId = nil
-
-    if startupCheckTimer then
-        startupCheckTimer:Cancel()
-        startupCheckTimer = nil
-    end
-
-    startupCheckTimer = C_Timer.NewTimer(2, function()
-        local hasDebuff, debuffId = FindTriggerDebuff()
-
-        if hasDebuff then
-            waitingForDebuffClear = true
-            lastSeenDebuffId = debuffId
-            if debugEvents then
-                Print("startup check: existing debuff found, waiting for clear")
-            end
-        else
-            suppressExistingDebuff = false
-            waitingForDebuffClear = false
-            lastSeenDebuffId = nil
-            if debugEvents then
-                Print("startup check: no existing debuff, addon armed")
-            end
-        end
-    end)
+local function IsTriggerDebuff(spellId)
+    return spellId and TRIGGER_DEBUFF_IDS[spellId] == true
 end
 
-local function BeginZoneSuppression()
-    suppressExistingDebuff = true
-    waitingForDebuffClear = false
-    sawDebuffDuringZoneSuppress = false
-    lastSeenDebuffId = nil
-    zoneSuppressActive = true
-
-    if zoneSuppressTimer then
-        zoneSuppressTimer:Cancel()
-        zoneSuppressTimer = nil
-    end
-
-    zoneSuppressTimer = C_Timer.NewTimer(5, function()
-        zoneSuppressActive = false
-
-        local hasDebuff, debuffId = FindTriggerDebuff()
-
-        -- If we saw the debuff at any point during the zone-load window,
-        -- treat it as old and wait for it to clear completely.
-        if sawDebuffDuringZoneSuppress or hasDebuff then
-            waitingForDebuffClear = true
-            lastSeenDebuffId = debuffId
-            if debugEvents then
-                Print("zone suppression ended: old debuff detected, waiting for clear")
-            end
-        else
-            suppressExistingDebuff = false
-            waitingForDebuffClear = false
-            lastSeenDebuffId = nil
-            if debugEvents then
-                Print("zone suppression ended: addon armed")
-            end
-        end
-    end)
-end
-
-frame:SetScript("OnEvent", function(_, event)
+frame:SetScript("OnEvent", function(_, event, ...)
     if debugEvents then
         Print("EVENT: " .. tostring(event) .. ", inCombat=" .. tostring(InCombatLockdown()))
     end
 
     if event == "PLAYER_LOGIN" then
-        StartUpdateTicker()
-        BeginStartupSuppression()
         return
     end
 
     if event == "PLAYER_ENTERING_WORLD" then
-        BeginStartupSuppression()
         return
     end
 
-    UpdateState()
+    if event == "UNIT_AURA" then
+        local unitTarget, updateInfo = ...
+        if unitTarget ~= "player" then
+            return
+        end
+
+        -- Some clients may not provide updateInfo; do nothing in that case.
+        if not updateInfo then
+            return
+        end
+
+        -- Ignore full aura rebuilds caused by loading screens / zoning.
+        if updateInfo.isFullUpdate then
+            if debugEvents then
+                Print("UNIT_AURA full update ignored")
+            end
+            return
+        end
+
+        -- Clear state if debuff is gone.
+        local hasDebuff = FindTriggerDebuff()
+        if not hasDebuff then
+            lastSeenDebuffId = nil
+        end
+
+        if not updateInfo.addedAuras or #updateInfo.addedAuras == 0 then
+            return
+        end
+
+        for _, aura in ipairs(updateInfo.addedAuras) do
+            if aura and IsTriggerDebuff(aura.spellId) then
+                if debugEvents then
+                    Print("New trigger debuff added: " .. tostring(aura.spellId))
+                end
+
+                if aura.spellId ~= lastSeenDebuffId then
+                    lastSeenDebuffId = aura.spellId
+                    StartLuststorm()
+                end
+                return
+            end
+        end
+
+        return
+    end
 end)
 
 SLASH_LUSTSTORM1 = "/luststorm"
