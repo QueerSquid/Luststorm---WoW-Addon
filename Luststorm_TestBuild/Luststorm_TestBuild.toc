@@ -1,0 +1,6 @@
+## Interface: 120001
+## Title: Luststorm TestBuild
+## Notes: Test build for Sandstorm on lust effects
+## Author: OpenAI
+## Version: 0.9.0-test
+Luststorm_TestBuild.lua
