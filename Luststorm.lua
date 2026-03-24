@@ -23,17 +23,10 @@ local frame = CreateFrame("Frame")
 local isPlaying = false
 local soundHandle = nil
 local manualTestMode = false
-local updateTicker = nil
 local lastSeenDebuffId = nil
 local debugEvents = false
 local lustStopTimer = nil
 local LUST_DURATION = 40
-local suppressExistingDebuff = true
-local waitingForDebuffClear = false
-local startupCheckTimer = nil
-local zoneSuppressActive = false
-local zoneSuppressTimer = nil
-local sawDebuffDuringZoneSuppress = false
 
 local function Print(msg)
     DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99Luststorm:|r " .. tostring(msg))
@@ -119,14 +112,6 @@ local function UpdateState()
 
     local hasDebuff, debuffId, debuffName = FindTriggerDebuff()
 
-    if zoneSuppressActive then
-        if hasDebuff then
-            sawDebuffDuringZoneSuppress = true
-            lastSeenDebuffId = debuffId
-        end
-        return
-    end
-
     if debugEvents then
         Print(
             "UpdateState: hasDebuff=" .. tostring(hasDebuff)
@@ -136,8 +121,20 @@ local function UpdateState()
             .. ", lastSeenDebuffId=" .. tostring(lastSeenDebuffId)
             .. ", suppressExistingDebuff=" .. tostring(suppressExistingDebuff)
             .. ", waitingForDebuffClear=" .. tostring(waitingForDebuffClear)
-            .. ", sawDebuffDuringZoneSuppress=" .. tostring(sawDebuffDuringZoneSuppress)
         )
+    end
+
+    -- On login / zoning, if the debuff already exists, do not play for it.
+    -- Wait until it fully clears once before re-arming.
+    if suppressExistingDebuff then
+        if hasDebuff then
+            waitingForDebuffClear = true
+            lastSeenDebuffId = debuffId
+            return
+        else
+            suppressExistingDebuff = false
+            lastSeenDebuffId = nil
+        end
     end
 
     if waitingForDebuffClear then
@@ -155,115 +152,55 @@ local function UpdateState()
         end
     end
 
-    -- Fresh new lust-related debuff: start playback
     if hasDebuff and debuffId ~= lastSeenDebuffId then
         lastSeenDebuffId = debuffId
         StartLuststorm()
+        return
     end
 
-    -- Reset tracking once debuff is gone
     if not hasDebuff then
         lastSeenDebuffId = nil
     end
 end
 
-local function StartUpdateTicker()
-    if updateTicker then
-        return
-    end
 
-    updateTicker = C_Timer.NewTicker(0.1, function()
-        UpdateState()
-    end)
+local function StartUpdateTicker()
+    return
 end
 
 frame:RegisterEvent("PLAYER_LOGIN")
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 frame:RegisterUnitEvent("UNIT_AURA", "player")
 
-local function BeginStartupSuppression()
-    suppressExistingDebuff = true
-    waitingForDebuffClear = false
-    lastSeenDebuffId = nil
-
-    if startupCheckTimer then
-        startupCheckTimer:Cancel()
-        startupCheckTimer = nil
-    end
-
-    startupCheckTimer = C_Timer.NewTimer(2, function()
-        local hasDebuff, debuffId = FindTriggerDebuff()
-
-        if hasDebuff then
-            waitingForDebuffClear = true
-            lastSeenDebuffId = debuffId
-            if debugEvents then
-                Print("startup check: existing debuff found, waiting for clear")
-            end
-        else
-            suppressExistingDebuff = false
-            waitingForDebuffClear = false
-            lastSeenDebuffId = nil
-            if debugEvents then
-                Print("startup check: no existing debuff, addon armed")
-            end
-        end
-    end)
-end
-
-local function BeginZoneSuppression()
-    suppressExistingDebuff = true
-    waitingForDebuffClear = false
-    sawDebuffDuringZoneSuppress = false
-    lastSeenDebuffId = nil
-    zoneSuppressActive = true
-
-    if zoneSuppressTimer then
-        zoneSuppressTimer:Cancel()
-        zoneSuppressTimer = nil
-    end
-
-    zoneSuppressTimer = C_Timer.NewTimer(5, function()
-        zoneSuppressActive = false
-
-        local hasDebuff, debuffId = FindTriggerDebuff()
-
-        -- If we saw the debuff at any point during the zone-load window,
-        -- treat it as old and wait for it to clear completely.
-        if sawDebuffDuringZoneSuppress or hasDebuff then
-            waitingForDebuffClear = true
-            lastSeenDebuffId = debuffId
-            if debugEvents then
-                Print("zone suppression ended: old debuff detected, waiting for clear")
-            end
-        else
-            suppressExistingDebuff = false
-            waitingForDebuffClear = false
-            lastSeenDebuffId = nil
-            if debugEvents then
-                Print("zone suppression ended: addon armed")
-            end
-        end
-    end)
-end
-
-frame:SetScript("OnEvent", function(_, event)
+frame:SetScript("OnEvent", function(_, event, ...)
     if debugEvents then
         Print("EVENT: " .. tostring(event) .. ", inCombat=" .. tostring(InCombatLockdown()))
     end
 
     if event == "PLAYER_LOGIN" then
+        suppressExistingDebuff = true
+        waitingForDebuffClear = false
+        lastSeenDebuffId = nil
         StartUpdateTicker()
-        BeginStartupSuppression()
         return
     end
 
     if event == "PLAYER_ENTERING_WORLD" then
-        BeginStartupSuppression()
+        suppressExistingDebuff = true
+        waitingForDebuffClear = false
+        lastSeenDebuffId = nil
         return
     end
 
-    UpdateState()
+    if event == "UNIT_AURA" then
+        local unitTarget = ...
+        if unitTarget ~= "player" then
+            return
+        end
+
+        UpdateState()
+        return
+    end
 end)
 
 SLASH_LUSTSTORM1 = "/luststorm"
